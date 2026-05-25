@@ -21,8 +21,9 @@ const MARCADORES_AUTO = [
 let plantillaSeleccionada = null;
 
 function mostrarSeccionPlantillas(mostrar) {
-  document.getElementById('seccionBusqueda').style.display   = mostrar ? 'none' : '';
-  document.getElementById('seccionPlantillas').style.display = mostrar ? '' : 'none';
+  document.getElementById('seccionBusqueda').style.display      = mostrar ? 'none' : '';
+  document.getElementById('seccionPlantillas').style.display    = mostrar ? '' : 'none';
+  document.getElementById('seccionDeclaraciones').style.display = 'none';
 }
 
 async function cargarPlantillas() {
@@ -73,26 +74,40 @@ async function cargarPlantillas() {
   } catch { contenedor.innerHTML = `<div class="empty" style="padding:36px">Error de conexión</div>`; }
 }
 
-function abrirModalSubirPlantilla() {
+function abrirModalSubirPlantilla(tipo = 'word') {
   document.getElementById('spNombre').value = '';
   document.getElementById('spArchivo').value = '';
   document.getElementById('spError').style.display = 'none';
+  document.getElementById('spTipo').value = tipo;
+  if (tipo === 'pdf') {
+    document.getElementById('spTitulo').textContent    = '⬆ Subir PDF oficial';
+    document.getElementById('spArchivoLabel').textContent = 'Archivo .pdf *';
+    document.getElementById('spArchivo').accept        = '.pdf';
+    document.getElementById('spInfo').textContent      = 'Sube el PDF oficial de la Junta CyL. Los usuarios podrán descargarlo en blanco para rellenarlo manualmente.';
+  } else {
+    document.getElementById('spTitulo').textContent    = '⬆ Subir plantilla Word';
+    document.getElementById('spArchivoLabel').textContent = 'Archivo .docx *';
+    document.getElementById('spArchivo').accept        = '.docx';
+    document.getElementById('spInfo').innerHTML        = 'El archivo debe tener los marcadores <code style="background:#f4f5f7;padding:1px 5px;border-radius:4px">{{nombre_campo}}</code> donde quieras que se auto-rellene el texto.';
+  }
   document.getElementById('modalSubirPlantilla').classList.add('open');
 }
 
 async function guardarPlantilla() {
   const nombre  = document.getElementById('spNombre').value.trim();
   const archivo = document.getElementById('spArchivo').files[0];
+  const tipo    = document.getElementById('spTipo').value || 'word';
   const errEl   = document.getElementById('spError');
   const btn     = document.getElementById('btnGuardarPlantilla');
   errEl.style.display = 'none';
   if (!nombre)  { errEl.textContent = 'El nombre es obligatorio'; errEl.style.display='block'; return; }
-  if (!archivo) { errEl.textContent = 'Selecciona un archivo .docx'; errEl.style.display='block'; return; }
+  if (!archivo) { errEl.textContent = `Selecciona un archivo .${tipo === 'pdf' ? 'pdf' : 'docx'}`; errEl.style.display='block'; return; }
   const ext = archivo.name.split('.').pop().toLowerCase();
-  if (ext !== 'docx') { errEl.textContent = 'Solo se admiten archivos .docx'; errEl.style.display='block'; return; }
+  const extEsperada = tipo === 'pdf' ? 'pdf' : 'docx';
+  if (ext !== extEsperada) { errEl.textContent = `Solo se admiten archivos .${extEsperada}`; errEl.style.display='block'; return; }
   const fd = new FormData();
   fd.append('nombre_visible', nombre);
-  fd.append('tipo', 'word');
+  fd.append('tipo', tipo);
   fd.append('archivo', archivo);
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Subiendo…';
   try {
@@ -100,7 +115,8 @@ async function guardarPlantilla() {
     if (!j.ok) { errEl.textContent = j.msg; errEl.style.display='block'; return; }
     toast('Plantilla subida correctamente ✓');
     cerrarModal2('modalSubirPlantilla');
-    cargarPlantillas();
+    if (tipo === 'pdf') cargarDeclaraciones();
+    else cargarPlantillas();
   } catch { errEl.textContent = 'Error de conexión'; errEl.style.display='block'; }
   finally { btn.disabled = false; btn.textContent = 'Subir'; }
 }
@@ -118,6 +134,17 @@ async function abrirModalGenerar(plantillaId) {
 
   await cargarSelectCotos('genCoto');
   await cargarSelectPersonas('genPersona');
+
+  const necesitaAutorizado = (plantillaSeleccionada.marcadores || [])
+    .some(m => m.startsWith('autorizado_'));
+  const bloqueAut = document.getElementById('genBloqueAutorizado');
+  if (necesitaAutorizado) {
+    bloqueAut.style.display = '';
+    document.getElementById('genAutorizado').value = '';
+    await cargarSelectPersonas('genAutorizado');
+  } else {
+    bloqueAut.style.display = 'none';
+  }
 
   const necesitaOrganizador = (plantillaSeleccionada.marcadores || [])
     .some(m => m.startsWith('organizador_'));
@@ -181,7 +208,6 @@ async function abrirModalGenerar(plantillaId) {
 
 async function cargarSelectCotos(selectId) {
   const sel = document.getElementById(selectId);
-  if (sel.options.length > 1) return;
   sel.innerHTML = '<option value="">— Selecciona un coto —</option>';
   try {
     const j = await fetch(`${API}buscar.php?tipo=cotos&q=`).then(r => r.json());
@@ -196,7 +222,6 @@ async function cargarSelectCotos(selectId) {
 
 async function cargarSelectPersonas(selectId) {
   const sel = document.getElementById(selectId);
-  if (sel.options.length > 1) return;
   sel.innerHTML = '<option value="">— Selecciona una persona —</option>';
   try {
     const j = await fetch(`${API}buscar.php?tipo=personas&q=`).then(r => r.json());
@@ -212,6 +237,7 @@ async function cargarSelectPersonas(selectId) {
 async function generarDocumento() {
   const cotoId        = document.getElementById('genCoto').value;
   const personaId     = document.getElementById('genPersona').value;
+  const autorizadoId  = document.getElementById('genAutorizado')?.value || '';
   const organizadorId = document.getElementById('genOrganizador')?.value || '';
   const errEl     = document.getElementById('genError');
   const btn       = document.getElementById('btnGenerarDoc');
@@ -242,6 +268,7 @@ async function generarDocumento() {
     plantilla_id:   plantillaSeleccionada.id,
     coto_id:        cotoId        ? parseInt(cotoId)        : 0,
     persona_id:     personaId     ? parseInt(personaId)     : 0,
+    autorizado_id:  autorizadoId  ? parseInt(autorizadoId)  : 0,
     organizador_id: organizadorId ? parseInt(organizadorId) : 0,
     campos_libres:  camposLibres,
   };
@@ -276,5 +303,56 @@ async function eliminarPlantilla(id, nombre) {
     if (!r.ok) { toast('Error: ' + r.msg); return; }
     toast('Plantilla eliminada ✓');
     cargarPlantillas();
+  } catch { toast('Error de conexión'); }
+}
+
+// ── Declaraciones Junta CyL (PDFs oficiales) ─────────────────
+async function cargarDeclaraciones() {
+  const contenedor = document.getElementById('declaracionesLista');
+  contenedor.innerHTML = '<div class="empty" style="padding:36px">Cargando…</div>';
+  try {
+    const j = await fetch(`${API}plantillas_api.php?tipo=pdf`).then(r => r.json());
+    if (!j.ok) { contenedor.innerHTML = `<div class="empty" style="padding:36px">Error: ${j.msg}</div>`; return; }
+    if (!j.data.length) {
+      contenedor.innerHTML = '<div class="empty" style="padding:36px">No hay trámites PDF disponibles aún.<br><small>El administrador puede subir los PDFs oficiales de la Junta con el botón "⬆ Subir PDF".</small></div>';
+      return;
+    }
+    contenedor.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:#f8f9fb">
+          <th style="padding:9px 16px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #dde1e7">Nombre</th>
+          <th style="padding:9px 16px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #dde1e7">Subida</th>
+          <th style="padding:9px 16px;border-bottom:1px solid #dde1e7"></th>
+        </tr></thead>
+        <tbody>
+          ${j.data.map(p => {
+            const fecha = new Date(p.created_at).toLocaleDateString('es-ES');
+            const btnEliminar = ES_ADMIN
+              ? `<button class="btn btn-danger btn-sm" onclick="eliminarDeclaracion(${p.id},'${p.nombre_visible.replace(/'/g,"\\'")}')">🗑</button>`
+              : '';
+            return `<tr style="border-bottom:1px solid #dde1e7">
+              <td style="padding:10px 16px;font-weight:600">📋 ${p.nombre_visible}</td>
+              <td style="padding:10px 16px;color:#6b7280;font-size:12px">${fecha}</td>
+              <td style="padding:10px 16px;white-space:nowrap;text-align:right">
+                <a class="btn btn-amber btn-sm" href="../plantillas/${p.nombre_archivo}" download="${p.nombre_visible}.pdf">⬇ Descargar</a>
+                ${btnEliminar}
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      <div style="padding:10px 16px;font-size:11px;color:#6b7280">
+        Descarga el PDF oficial, rellénalo y envíalo a la Junta desde el propio documento.
+      </div>`;
+  } catch { contenedor.innerHTML = `<div class="empty" style="padding:36px">Error de conexión</div>`; }
+}
+
+async function eliminarDeclaracion(id, nombre) {
+  if (!confirm(`¿Eliminar "${nombre}"?\nEsta acción no se puede deshacer.`)) return;
+  try {
+    const r = await fetch(`${API}plantillas_api.php?id=${id}`, { method:'DELETE' }).then(x => x.json());
+    if (!r.ok) { toast('Error: ' + r.msg); return; }
+    toast('Trámite eliminado ✓');
+    cargarDeclaraciones();
   } catch { toast('Error de conexión'); }
 }

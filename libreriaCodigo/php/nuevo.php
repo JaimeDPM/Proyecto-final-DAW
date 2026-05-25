@@ -54,11 +54,11 @@ try {
             ':razon_social'=>$body['razon_social']?:null, ':pj_nif'=>$body['pj_nif']?:null,
             ':pj_telefono'=>$body['pj_telefono']?:null, ':pj_telefonomovil'=>$body['pj_telefonomovil']?:null,
             ':pj_email'=>$body['pj_email']?:null, ':pj_tipovia'=>$body['pj_tipovia']?:null,
-            ':pj_direccion'=>$body['pj_direccion']?:null, ':pj_numero'=>$body['pj_numero']?:null,
+            ':pj_direccion'=>$body['pj_direccion']??'', ':pj_numero'=>$body['pj_numero']?:null,
             ':pj_portal'=>$body['pj_portal']?:null, ':pj_escalera'=>$body['pj_escalera']?:null,
             ':pj_piso'=>$body['pj_piso']?:null, ':pj_puerta'=>$body['pj_puerta']?:null,
-            ':pj_cp'=>$body['pj_cp']?:null, ':pj_localidad'=>$body['pj_localidad']?:null,
-            ':pj_municipio'=>$body['pj_municipio']?:null, ':pj_provincia'=>$body['pj_provincia']?:null,
+            ':pj_cp'=>$body['pj_cp']??'', ':pj_localidad'=>$body['pj_localidad']?:null,
+            ':pj_municipio'=>$body['pj_municipio']??'', ':pj_provincia'=>$body['pj_provincia']??'',
             ':notas'=>$body['notas']?:null,
         ]);
         $cotoId = (int)$pdo->lastInsertId();
@@ -84,7 +84,7 @@ try {
     }
 } catch (PDOException $e) {
     if ($e->getCode() == 23000) {
-        http_response_code(409); echo json_encode(['ok'=>false,'msg'=>'Ya existe un registro con esa matrícula o DNI.']);
+        http_response_code(409); echo json_encode(['ok'=>false,'msg'=>'Ya existe un registro con esa matrícula o DNI. ' . $e->getMessage()]);
     } else {
         http_response_code(500); echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]);
     }

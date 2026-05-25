@@ -41,7 +41,16 @@ function cambiarTab(tab) {
     return;
   }
 
+  if (tab === 'declaraciones') {
+    mostrarSeccionPlantillas(false);
+    document.getElementById('seccionBusqueda').style.display      = 'none';
+    document.getElementById('seccionDeclaraciones').style.display = '';
+    cargarDeclaraciones();
+    return;
+  }
+
   mostrarSeccionPlantillas(false);
+  document.getElementById('seccionDeclaraciones').style.display = 'none';
   const cfg = tabConfig[tab];
   document.getElementById('lblBuscar').textContent        = cfg.label;
   document.getElementById('q').placeholder                = cfg.placeholder;

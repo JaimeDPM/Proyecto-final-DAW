@@ -82,12 +82,30 @@
         <div class="card-header-row">
           <span>Plantillas disponibles</span>
           <?php if (($_SESSION['usuario_rol'] ?? '') === 'admin'): ?>
-          <button class="btn btn-primary btn-sm" onclick="abrirModalSubirPlantilla()">⬆ Subir plantilla</button>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalSubirPlantilla('word')">⬆ Subir plantilla</button>
           <?php endif; ?>
         </div>
       </div>
       <div class="card-body" style="padding:0">
         <div id="plantillasLista"><div class="empty" style="padding:36px">Cargando plantillas…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECCIÓN DECLARACIONES JUNTA (PDFs oficiales) ── -->
+  <div id="seccionDeclaraciones" style="display:none">
+    <div class="card">
+      <div class="card-header">
+        <div class="ibadge">📋</div>
+        <div class="card-header-row">
+          <span>Trámites oficiales Junta CyL</span>
+          <?php if (($_SESSION['usuario_rol'] ?? '') === 'admin'): ?>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalSubirPlantilla('pdf')">⬆ Subir PDF</button>
+          <?php endif; ?>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div id="declaracionesLista"><div class="empty" style="padding:36px">Cargando trámites…</div></div>
       </div>
     </div>
   </div>
@@ -101,6 +119,7 @@
           <button class="btn btn-ghost btn-sm" onclick="cambiarMes(-1)">◀</button>
           <span class="cal-mes-label" id="calMesLabel"></span>
           <button class="btn btn-ghost btn-sm" onclick="cambiarMes(1)">▶</button>
+          <input type="month" id="calInputFecha" onchange="irAFecha()" style="border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:13px;color:var(--text);background:var(--surface);cursor:pointer">
         </div>
         <button class="btn btn-primary btn-sm" onclick="abrirModalNuevo()">+ Nuevo evento</button>
       </div>
@@ -186,7 +205,7 @@
 </div>
 
 <!-- ── MODAL EDITAR/NUEVO PERSONA ── -->
-<div class="modal-overlay" id="modalPersona" onclick="cerrarModalSiOverlay2(event,'modalPersona')">
+<div class="modal-overlay" id="modalPersona" ondblclick="cerrarModalSiOverlay2(event,'modalPersona')">
   <div class="modal" style="max-width:600px">
     <h3 id="modalPersonaTitulo">Nueva persona</h3>
     <input type="hidden" id="pId">
@@ -233,7 +252,7 @@
 </div>
 
 <!-- ── MODAL EDITAR/NUEVO COTO ── -->
-<div class="modal-overlay" id="modalCoto" onclick="cerrarModalSiOverlay2(event,'modalCoto')">
+<div class="modal-overlay" id="modalCoto" ondblclick="cerrarModalSiOverlay2(event,'modalCoto')">
   <div class="modal" style="max-width:600px">
     <h3 id="modalCotoTitulo">Nuevo coto</h3>
     <input type="hidden" id="cId">
@@ -325,15 +344,16 @@
 <!-- ── MODAL SUBIR PLANTILLA (solo admin) ── -->
 <div class="modal-overlay" id="modalSubirPlantilla" onclick="cerrarModalSiOverlay2(event,'modalSubirPlantilla')">
   <div class="modal" style="max-width:480px">
-    <h3>⬆ Subir plantilla Word</h3>
+    <h3 id="spTitulo">⬆ Subir plantilla Word</h3>
+    <input type="hidden" id="spTipo" value="word">
     <div class="form-group">
       <label>Nombre de la plantilla *</label>
       <input type="text" id="spNombre" placeholder="Ej: Autorización control poblacional">
     </div>
     <div class="form-group">
-      <label>Archivo .docx *</label>
+      <label id="spArchivoLabel">Archivo .docx *</label>
       <input type="file" id="spArchivo" accept=".docx" style="padding:6px 0;border:none;font-size:13px">
-      <div style="font-size:11px;color:#6b7280;margin-top:4px">
+      <div id="spInfo" style="font-size:11px;color:#6b7280;margin-top:4px">
         El archivo debe tener los marcadores <code style="background:#f4f5f7;padding:1px 5px;border-radius:4px">{{nombre_campo}}</code> donde quieras que se auto-rellene el texto.
       </div>
     </div>
@@ -361,6 +381,13 @@
       <label>Persona (representante / autorizado / firmante)</label>
       <select id="genPersona"><option value="">— Selecciona una persona —</option></select>
       <div style="font-size:11px;color:#6b7280;margin-top:3px">Sus datos personales se rellenarán automáticamente.</div>
+    </div>
+    <div id="genBloqueAutorizado" style="display:none">
+      <div class="form-group">
+        <label>Persona autorizada</label>
+        <select id="genAutorizado"><option value="">— Selecciona una persona —</option></select>
+        <div style="font-size:11px;color:#6b7280;margin-top:3px">Sus datos se rellenarán en los campos {{autorizado_*}}.</div>
+      </div>
     </div>
     <div id="genBloqueOrganizador" style="display:none">
       <div class="form-group">

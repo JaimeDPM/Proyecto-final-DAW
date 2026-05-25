@@ -27,11 +27,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $body = json_decode(file_get_contents('php://input'), true) ?? [];
 
-$plantillaId  = (int)($body['plantilla_id']  ?? 0);
-$cotoId       = (int)($body['coto_id']       ?? 0);
-$personaId    = (int)($body['persona_id']    ?? 0);
-$organizadorId= (int)($body['organizador_id']?? 0);
-$camposLibres = $body['campos_libres']       ?? [];
+$plantillaId   = (int)($body['plantilla_id']   ?? 0);
+$cotoId        = (int)($body['coto_id']        ?? 0);
+$personaId     = (int)($body['persona_id']     ?? 0);
+$autorizadoId  = (int)($body['autorizado_id']  ?? 0);
+$organizadorId = (int)($body['organizador_id'] ?? 0);
+$camposLibres  = $body['campos_libres']        ?? [];
 
 if ($plantillaId <= 0) {
     http_response_code(400);
@@ -79,7 +80,13 @@ try {
                 p.dni_nif    AS tit_nif,
                 p.telefono   AS tit_telefono,
                 p.email      AS tit_email,
+                p.tipovia    AS tit_tipovia,
                 p.direccion  AS tit_direccion,
+                p.numero     AS tit_numero,
+                p.portal     AS tit_portal,
+                p.escalera   AS tit_escalera,
+                p.piso       AS tit_piso,
+                p.puerta     AS tit_puerta,
                 p.municipio  AS tit_municipio,
                 p.provincia  AS tit_provincia,
                 p.cp         AS tit_cp
@@ -103,7 +110,18 @@ try {
         $datosPersona = $stmt->fetch() ?: [];
     }
 
-    // ── 4. Obtener datos del organizador ─────────────────────
+    // ── 4. Obtener datos del autorizado ──────────────────────
+    $datosAutorizado = [];
+    if ($autorizadoId > 0) {
+        $stmt = $pdo->prepare("SELECT * FROM personas WHERE id = :id AND deleted_at IS NULL");
+        $stmt->execute([':id' => $autorizadoId]);
+        $datosAutorizado = $stmt->fetch() ?: [];
+    } elseif ($personaId > 0) {
+        // Si no se selecciona autorizado específico, usar la persona seleccionada
+        $datosAutorizado = $datosPersona;
+    }
+
+    // ── 6. Obtener datos del organizador ─────────────────────
     // Solo se consulta si la plantilla tiene marcadores {{organizador_*}}
     $datosOrganizador = [];
 
@@ -119,6 +137,40 @@ try {
     // Si hay razon_social en el coto → persona jurídica, usamos pj_*
     // Si no → persona física, usamos los datos de la tabla personas via titular_id
     $esPJ = !empty($datosCoto['razon_social']);
+
+    // ── Helper: construir dirección completa ─────────────────
+    // Combina tipovia, direccion, numero, portal, escalera, piso, puerta
+    function buildDireccion(array $d, string $prefix = ''): string {
+        $p = fn($k) => $d[$prefix . $k] ?? '';
+        $partes = array_filter([
+            trim($p('tipovia') . ' ' . $p('direccion')),
+            $p('numero') ? 'nº ' . $p('numero') : '',
+            $p('portal') ? 'Portal ' . $p('portal') : '',
+            $p('escalera') ? 'Esc. ' . $p('escalera') : '',
+            $p('piso') ? $p('piso') . 'º' : '',
+            $p('puerta') ? $p('puerta') : '',
+        ]);
+        return implode(', ', $partes);
+    }
+
+    // Dirección completa del titular persona física
+    $titDireccion = $esPJ
+        ? buildDireccion($datosCoto, 'pj_')
+        : buildDireccion([
+            'tipovia'   => $datosCoto['tit_tipovia']   ?? '',
+            'direccion' => $datosCoto['tit_direccion'] ?? '',
+            'numero'    => $datosCoto['tit_numero']    ?? '',
+            'portal'    => $datosCoto['tit_portal']    ?? '',
+            'escalera'  => $datosCoto['tit_escalera']  ?? '',
+            'piso'      => $datosCoto['tit_piso']      ?? '',
+            'puerta'    => $datosCoto['tit_puerta']    ?? '',
+        ]);
+
+    // Dirección completa de la persona seleccionada
+    $persDireccion = buildDireccion($datosPersona);
+
+    // Dirección completa del organizador
+    $orgDireccion = buildDireccion($datosOrganizador);
 
     // Datos del coto
     $vars = [
@@ -136,7 +188,7 @@ try {
         '{{titular_nif}}'         => $esPJ ? ($datosCoto['pj_nif']      ?? '') : ($datosCoto['tit_nif']      ?? ''),
         '{{titular_telefono}}'    => $esPJ ? ($datosCoto['pj_telefono']  ?? '') : ($datosCoto['tit_telefono']  ?? ''),
         '{{titular_email}}'       => $esPJ ? ($datosCoto['pj_email']     ?? '') : ($datosCoto['tit_email']     ?? ''),
-        '{{titular_direccion}}'   => $esPJ ? ($datosCoto['pj_direccion'] ?? '') : ($datosCoto['tit_direccion'] ?? ''),
+        '{{titular_direccion}}'   => $titDireccion,
         '{{titular_municipio}}'   => $esPJ ? ($datosCoto['pj_municipio'] ?? '') : ($datosCoto['tit_municipio'] ?? ''),
         '{{titular_provincia}}'   => $esPJ ? ($datosCoto['pj_provincia'] ?? '') : ($datosCoto['tit_provincia'] ?? ''),
         '{{titular_cp}}'          => $esPJ ? ($datosCoto['pj_cp']        ?? '') : ($datosCoto['tit_cp']        ?? ''),
@@ -159,7 +211,7 @@ try {
         '{{persona_telefono}}'    => $datosPersona['telefono']        ?? '',
         '{{persona_movil}}'       => $datosPersona['telefonomovil']   ?? '',
         '{{persona_email}}'       => $datosPersona['email']           ?? '',
-        '{{persona_direccion}}'   => $datosPersona['direccion']       ?? '',
+        '{{persona_direccion}}'   => $persDireccion,
         '{{persona_municipio}}'   => $datosPersona['municipio']       ?? '',
         '{{persona_provincia}}'   => $datosPersona['provincia']       ?? '',
         '{{persona_cp}}'          => $datosPersona['cp']              ?? '',
@@ -169,10 +221,10 @@ try {
                                           ($datosPersona['apellido1'] ?? '') . ' ' .
                                           ($datosPersona['apellido2'] ?? '')),
         '{{representante_dni}}'    => $datosPersona['dni_nif']        ?? '',
-        '{{autorizado_nombre}}'    => trim(($datosPersona['nombre']   ?? '') . ' ' .
-                                          ($datosPersona['apellido1'] ?? '') . ' ' .
-                                          ($datosPersona['apellido2'] ?? '')),
-        '{{autorizado_nif}}'       => $datosPersona['dni_nif']        ?? '',
+        '{{autorizado_nombre}}'    => trim(($datosAutorizado['nombre']   ?? '') . ' ' .
+                                          ($datosAutorizado['apellido1'] ?? '') . ' ' .
+                                          ($datosAutorizado['apellido2'] ?? '')),
+        '{{autorizado_nif}}'       => $datosAutorizado['dni_nif']        ?? '',
 
         // Fecha actual
         '{{fecha_hoy}}'            => date('d/m/Y'),
@@ -186,7 +238,7 @@ try {
         '{{organizador_telefono}}' => $datosOrganizador['telefono']        ?? '',
         '{{organizador_movil}}'    => $datosOrganizador['telefonomovil']   ?? '',
         '{{organizador_email}}'    => $datosOrganizador['email']           ?? '',
-        '{{organizador_direccion}}'=> $datosOrganizador['direccion']       ?? '',
+        '{{organizador_direccion}}'=> $orgDireccion,
         '{{organizador_municipio}}'=> $datosOrganizador['municipio']       ?? '',
         '{{organizador_provincia}}'=> $datosOrganizador['provincia']       ?? '',
         '{{organizador_cp}}'       => $datosOrganizador['cp']              ?? '',

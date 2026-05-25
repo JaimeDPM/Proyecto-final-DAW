@@ -57,9 +57,21 @@ function abrirEventoProximo(i) {
   if (ev) abrirModalEditar(ev, ev.id);
 }
 
+function irAFecha() {
+  const val = document.getElementById('calInputFecha').value;
+  if (!val) return;
+  const [anyo, mes] = val.split('-');
+  calFecha.setFullYear(parseInt(anyo));
+  calFecha.setMonth(parseInt(mes) - 1);
+  renderCalendario();
+}
+
 async function renderCalendario() {
-  document.getElementById('calMesLabel').textContent =
-    MESES[calFecha.getMonth()] + ' ' + calFecha.getFullYear();
+  const label = document.getElementById('calMesLabel');
+  if (label) label.textContent = MESES[calFecha.getMonth()] + ' ' + calFecha.getFullYear();
+  // Sincronizar input month
+  const input = document.getElementById('calInputFecha');
+  if (input) input.value = mesStr();
   try {
     const j = await fetch(`${API}eventos.php?mes=${mesStr()}`).then(r => r.json());
     calEventos = j.ok ? j.data : [];

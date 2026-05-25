@@ -56,12 +56,26 @@ try {
 
         $anyoActual = (int)date('Y');
         foreach ($recurrentes as $ev) {
-            $mmdd     = substr($ev['fecha_inicio'], 5);
-            $fechaEst = $anyoActual . '-' . $mmdd;
-            if ($fechaEst < $hoy) $fechaEst = ($anyoActual + 1) . '-' . $mmdd;
-            if ($fechaEst >= $hoy && $fechaEst <= $fin) {
-                $ev['fecha_inicio'] = $fechaEst;
-                $rows[] = $ev;
+            $mmddInicio = substr($ev['fecha_inicio'], 5);
+            $fechaEst   = $anyoActual . '-' . $mmddInicio;
+            if ($fechaEst < $hoy) $fechaEst = ($anyoActual + 1) . '-' . $mmddInicio;
+
+            if (!empty($ev['fecha_fin'])) {
+                $mmddFin    = substr($ev['fecha_fin'], 5);
+                $anyoEst    = substr($fechaEst, 0, 4);
+                $fechaFinEst = $anyoEst . '-' . $mmddFin;
+                if ($fechaFinEst < $fechaEst) $fechaFinEst = ($anyoEst + 1) . '-' . $mmddFin;
+                // Solapa con los próximos 15 días
+                if ($fechaEst <= $fin && $fechaFinEst >= $hoy) {
+                    $ev['fecha_inicio'] = $fechaEst;
+                    $ev['fecha_fin']    = $fechaFinEst;
+                    $rows[] = $ev;
+                }
+            } else {
+                if ($fechaEst >= $hoy && $fechaEst <= $fin) {
+                    $ev['fecha_inicio'] = $fechaEst;
+                    $rows[] = $ev;
+                }
             }
         }
 
@@ -116,11 +130,29 @@ try {
         $recurrentes = $stmt2->fetchAll();
 
         foreach ($recurrentes as $ev) {
-            $mmdd            = substr($ev['fecha_inicio'], 5);
-            $fechaProyectada = $anyoMes . '-' . $mmdd;
-            if ($fechaProyectada >= $inicio && $fechaProyectada <= $fin) {
-                $ev['fecha_inicio'] = $fechaProyectada;
-                $rows[] = $ev;
+            $anyoOrigen     = (int)substr($ev['fecha_inicio'], 0, 4);
+            $mmddInicio     = substr($ev['fecha_inicio'], 5);
+            $mmddFin        = !empty($ev['fecha_fin']) ? substr($ev['fecha_fin'], 5) : null;
+
+            // Probar proyección en año actual y anterior (por si el rango cruza años)
+            foreach ([$anyoMes - 1, $anyoMes, $anyoMes + 1] as $anyoProy) {
+                if ($anyoProy < $anyoOrigen) continue; // No proyectar antes del año original
+                $fechaInicioProy = $anyoProy . '-' . $mmddInicio;
+                $fechaFinProy    = $mmddFin ? $anyoProy . '-' . $mmddFin : $fechaInicioProy;
+
+                // Si fin < inicio en el año proyectado, fin es el año siguiente
+                if ($mmddFin && $fechaFinProy < $fechaInicioProy) {
+                    $fechaFinProy = ($anyoProy + 1) . '-' . $mmddFin;
+                }
+
+                // Comprobar si solapa con el mes consultado
+                if ($fechaInicioProy <= $fin && $fechaFinProy >= $inicio) {
+                    $evProy = $ev;
+                    $evProy['fecha_inicio'] = $fechaInicioProy;
+                    $evProy['fecha_fin']    = $mmddFin ? $fechaFinProy : null;
+                    $rows[] = $evProy;
+                    break; // Evitar duplicados
+                }
             }
         }
 
